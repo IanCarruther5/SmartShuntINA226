@@ -50,7 +50,7 @@
   <button type=\"submit\">Set</button></div> <br><br>"
 
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
-const char wifiInitialApPassword[] = "12345678";
+const char wifiInitialApPassword[] = "password";
 
 // -- Configuration specific key. The value should be modified if config structure was changed.
 #define CONFIG_VERSION "C1"
@@ -116,7 +116,7 @@ bool gModbusEanbled = false;
 
 bool gVictronEanbled = true;
 
-char gCustomName[64] = "INR SmartShunt S2";
+char gCustomName[64] = "SmartShunt D1";
 
 // -- We can add a legend to the separator
 IotWebConf iotWebConf(gCustomName, &dnsServer, &server, wifiInitialApPassword, CONFIG_VERSION);
@@ -133,7 +133,7 @@ iotwebconf::FloatTParameter shuntResistance =
 iotwebconf::UIntTParameter<uint16_t> maxCurrent =
   iotwebconf::Builder<iotwebconf::UIntTParameter<uint16_t>>("maxA").
   label("Expected max current [A]").
-  defaultValue(200).
+  defaultValue(20).
   min(1u).
   step(1u).
   placeholder("1..65535").
@@ -143,7 +143,7 @@ iotwebconf::UIntTParameter<uint16_t> maxCurrent =
 iotwebconf::FloatTParameter voltageFactor =
    iotwebconf::Builder<iotwebconf::FloatTParameter>("voltageF").
     label("Voltage calibration factor (*1000)").
-    defaultValue(2938.92f).
+    defaultValue(1).
     step(0.01).
     placeholder("e.g. 2340.34").
    build();
@@ -202,7 +202,7 @@ iotwebconf::UIntTParameter<uint16_t> tailCurrent =
 iotwebconf::UIntTParameter<uint16_t> fullVoltage =
   iotwebconf::Builder<iotwebconf::UIntTParameter<uint16_t>>("fullV").
   label("Voltage when full [mV]").
-  defaultValue(55200).
+  defaultValue(52300).
   min(1).
   step(1).
   placeholder("1..65535").
@@ -222,7 +222,7 @@ IotWebConfParameterGroup communicationGroup = IotWebConfParameterGroup("comm","C
 iotwebconf::UIntTParameter<uint16_t> modbusId =
   iotwebconf::Builder<iotwebconf::UIntTParameter<uint16_t>>("mbid").
   label("Modbus Id").
-  defaultValue(2).
+  defaultValue(14).
   min(1).
   max(128).
   step(1).
