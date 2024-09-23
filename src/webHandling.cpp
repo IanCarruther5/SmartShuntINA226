@@ -50,10 +50,10 @@
   <button type=\"submit\">Set</button></div> <br><br>"
 
 // -- Initial password to connect to the Thing, when it creates an own Access Point.
-const char wifiInitialApPassword[] = "12345678";
+const char wifiInitialApPassword[] = "password";
 
 // -- Configuration specific key. The value should be modified if config structure was changed.
-#define CONFIG_VERSION "C1"
+#define CONFIG_VERSION "C2"
 
 // -- When CONFIG_PIN is pulled to ground on startup, the Thing will use the initial
 //      password to buld an AP. (E.g. in case of lost password)
@@ -116,7 +116,9 @@ bool gModbusEanbled = false;
 
 bool gVictronEanbled = true;
 
-char gCustomName[64] = "INR SmartShunt S2";
+char gCustomName[64] = "SmartShunt D1";
+
+char gMonType[2] ="1";
 
 // -- We can add a legend to the separator
 IotWebConf iotWebConf(gCustomName, &dnsServer, &server, wifiInitialApPassword, CONFIG_VERSION);
@@ -133,7 +135,7 @@ iotwebconf::FloatTParameter shuntResistance =
 iotwebconf::UIntTParameter<uint16_t> maxCurrent =
   iotwebconf::Builder<iotwebconf::UIntTParameter<uint16_t>>("maxA").
   label("Expected max current [A]").
-  defaultValue(200).
+  defaultValue(20).
   min(1u).
   step(1u).
   placeholder("1..65535").
@@ -143,7 +145,7 @@ iotwebconf::UIntTParameter<uint16_t> maxCurrent =
 iotwebconf::FloatTParameter voltageFactor =
    iotwebconf::Builder<iotwebconf::FloatTParameter>("voltageF").
     label("Voltage calibration factor (*1000)").
-    defaultValue(2938.92f).
+    defaultValue(1).
     step(0.01).
     placeholder("e.g. 2340.34").
    build();
@@ -202,7 +204,7 @@ iotwebconf::UIntTParameter<uint16_t> tailCurrent =
 iotwebconf::UIntTParameter<uint16_t> fullVoltage =
   iotwebconf::Builder<iotwebconf::UIntTParameter<uint16_t>>("fullV").
   label("Voltage when full [mV]").
-  defaultValue(55200).
+  defaultValue(52300).
   min(1).
   step(1).
   placeholder("1..65535").
@@ -222,7 +224,7 @@ IotWebConfParameterGroup communicationGroup = IotWebConfParameterGroup("comm","C
 iotwebconf::UIntTParameter<uint16_t> modbusId =
   iotwebconf::Builder<iotwebconf::UIntTParameter<uint16_t>>("mbid").
   label("Modbus Id").
-  defaultValue(2).
+  defaultValue(14).
   min(1).
   max(128).
   step(1).
@@ -241,6 +243,20 @@ iotwebconf::SelectTParameter<STRING_LEN> protocolChooserParam =
    optionCount(sizeof(protocolValues) / STRING_LEN).
    nameLength(STRING_LEN).
    defaultValue("v").
+   build();
+
+static const char monValues[][STRING_LEN] = { "-9", "-8","-7","-6","-5","-4","-3","-2","-1","0","1","2","3","4","5","6","7","8" };
+static const char monNames[][STRING_LEN] = { "Solar charger", "Wind turbine", "Shaft generator","Alternator","Fuel cell","Water generator","DC/DC charger",
+"AC charger", "Generic source","Battery monitor","Generic load","Electric drive","Fridge","Water pump","Bilge pump","DC system","Inverter","Water heater"};
+
+iotwebconf::SelectTParameter<STRING_LEN> monitorType =
+   iotwebconf::Builder<iotwebconf::SelectTParameter<STRING_LEN>>("mon").
+   label("Monitor Type").
+   optionValues((const char*)monValues).
+   optionNames((const char*)monNames).
+   optionCount(sizeof(monValues) / STRING_LEN).
+   nameLength(STRING_LEN).
+   defaultValue(gMonType).
    build();
 
 iotwebconf::TextTParameter<sizeof(gCustomName)> nameParam =
@@ -294,7 +310,26 @@ String s = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" conte
 
   server.send(200, "text/html", s);
 }
+/**
+ * Handle web requests to "/api" path.
+ */
+void handleApi()
+{
+  String s = "{";
+  
+    s += "\"BatteryVoltage\": " + String(gBattery.voltage())+",";
+    s += "\"ShuntCurrent\": " + String(gBattery.current(),3) +",";
+    s += "\"Power\": " + String(gBattery.voltage()*gBattery.current())+",";
+    s += "\"Temperature\": " + String(gBattery.temperature())+",";
+    s += "\"Humidity\": " + String(gBattery.humidity())+",";
+    s += "\"AvgConsumption\": " + String(gBattery.averageCurrent(),3) ;
+  
+  
+  s+="}";
 
+
+  server.send(200, "text/json", s);
+}
 void wifiSetup()
 {
   shuntResistance.customHtml = "min='0.001' max='10.0' step='0.001'";
@@ -316,6 +351,7 @@ void wifiSetup()
   // communication settings
 
   communicationGroup.addItem(&nameParam);
+  communicationGroup.addItem(&monitorType);
   communicationGroup.addItem(&protocolChooserParam);
   communicationGroup.addItem(&modbusId);
 
@@ -352,6 +388,8 @@ void wifiSetup()
   
   server.on("/setruntime", handleSetRuntime);
   server.on("/setsoc",HTTP_POST,onSetSoc);
+    server.on("/api", handleApi);
+
 }
 
 void wifiLoop()
@@ -384,7 +422,14 @@ void handleRoot()
   String s = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";
   s += "<meta http-equiv=\"refresh\" content=\"3; url=/\">";
   s += "<title>"+String(gCustomName)+"</title></head><body>";
-  
+ 
+    char serialnr[32];
+  #if ESP32
+            sprintf(serialnr, "%08X", ESP.getEfuseMac());
+#else
+            sprintf(serialnr, "%08X", ESP.getChipId());
+#endif
+ s += "<br><br><b>Serial Number</b> : " +String(serialnr  );
   s += "<br><br><b>Config Values</b> <ul>";
   s += "<li>Shunt resistance  : " + String(gShuntResistancemR, 4) + " m&#8486;";
   s += "<li>Shunt max current : " + String(gMaxCurrentA, 3) + " A";
@@ -407,15 +452,28 @@ void handleRoot()
   if (gSensorInitialized) {
     s += "<ul> <li>Battery Voltage: " + String(gBattery.voltage()) + " V";
     s += "<li>Shunt current  : " + String(gBattery.current(),3) + " A";
+
+    s += "<li>Power : " + String(gBattery.voltage()*gBattery.current())+" W";
     s += "<li>Avg consumption: " + String(gBattery.averageCurrent(),3) + " A";
     s += "<li>Battery soc    : " + String(gBattery.soc(),3);
-    s += "<li>Time to go     : " + String(gBattery.tTg()) + " s";
+    
+     int intVal;
+     if (gBattery.tTg() == INFINITY) {
+        intVal = -1;
+    } else {
+        intVal = roundf(gBattery.tTg() / 60);
+    }
+    s += "<li>Time to go     : " + String(intVal) + " s";
     s += "<li>Battery full   : " + String(gBattery.isFull()?"true":"false");
     s += "</ul>";
+   
   } else {
     s += "<br><div><font color=\"red\" size=+1><b>Sensor failure!</b></font></div><br>";
   }
-  
+  s += "<ul> ";
+   s += "<li>Temperature : " + String(gBattery.temperature())+" C";
+    s += "<li>Humidity: " + String(gBattery.humidity(),3) + " %";
+    s += "</ul>";
   s += "<UL><LI>Go to <a href='config'>configure page</a> to change configuration.";
   s += "<LI>Go to <a href='setruntime'>runtime modification page</a> to change runtime data.</UL>";
   s += "</body></html>\n";
@@ -440,6 +498,7 @@ void convertParams() {
     gModbusEanbled = strcmp(protocolChooserParam.value(),"m") == 0; 
     gVictronEanbled = strcmp(protocolChooserParam.value(), "v") == 0;
     strcpy(gCustomName, nameParam.value());
+    strcpy(gMonType, monitorType.value());
 }
 
 void configSaved()

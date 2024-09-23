@@ -47,6 +47,8 @@ public:
     void updateSOC();
     void updateTtG();
     void setVoltage(float currVoltage);
+    void setTemperature(float currTemperature);
+    void setHumidity(float currHumidity);
     bool checkFull();
     void updateConsumption(float current, float period, uint16_t numPeriods);
     void updateStats(unsigned long now);
@@ -71,7 +73,12 @@ public:
     float averageCurrent() {
         return getAverageConsumption();
     }
-
+    float temperature() {
+        return lastTemperature;
+    }
+    float humidity() {
+        return lastHumidity;
+    }
     void setBatterySoc(float val);
     const Statistics& statistics() {return stats;}
 
@@ -97,6 +104,8 @@ public:
         unsigned long lasStatUpdate;
         bool isSynced;
         Statistics stats;
+        float lastTemperature;
+        float lastHumidity;
 };
 
 extern BatteryStatus gBattery;

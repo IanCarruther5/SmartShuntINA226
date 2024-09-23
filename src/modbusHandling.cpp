@@ -7,10 +7,12 @@
 #include "webHandling.h"
 #include "sensorHandling.h"
 
+#include "ModbusIP_ESP8266.h"
+
 
 static bool saveConfig = false;
 static ModbusRTU *modbusServer = 0;
-
+static ModbusIP *modbusServerIP =0;
 // These are the Input Registers
 // They contain current data
 enum INPUT_REGISTERS {
@@ -198,7 +200,11 @@ uint16_t getter(TRegister *reg, uint16_t) {
 
 void modbusInit()
 {
-  
+  if (modbusServerIP)
+  {
+    delete modbusServerIP;
+    modbusServerIP = 0;
+  }
   if (modbusServer)
   {
     delete modbusServer;
@@ -209,6 +215,14 @@ void modbusInit()
       if (SERIAL_MODBUS.baudRate() != 9600) {
           SERIAL_MODBUS.updateBaudRate(9600);
       }
+      modbusServerIP= new ModbusIP;
+      modbusServerIP->server(4444);
+      modbusServerIP->addIreg(0, 0, REG_NUM_INPUT_REGISTERS);
+      modbusServerIP->addHreg(0, 0, REG_NUM_HOLDING_REGISTERS);
+      modbusServerIP->onGet(IREG(0), getter, REG_NUM_INPUT_REGISTERS);
+      modbusServerIP->onGet(HREG(0), getter, REG_NUM_HOLDING_REGISTERS);
+      modbusServerIP->onSet(HREG(0), setter, REG_NUM_HOLDING_REGISTERS);
+
 
       modbusServer = new ModbusRTU;
       // Config Modbus RTU
@@ -228,6 +242,7 @@ void modbusLoop() {
     if (gModbusEanbled) {
         // poll for Modbus requests
         modbusServer->task();
+        modbusServerIP->task();
         if (saveConfig) {
             saveConfig = false;
             wifiStoreConfig();

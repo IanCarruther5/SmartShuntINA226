@@ -109,7 +109,12 @@ float BatteryStatus::getAverageConsumption() {
 void BatteryStatus::setVoltage(float currVoltage) {
     lastVoltage = currVoltage;
 }
-
+void BatteryStatus::setTemperature(float currTemperature) {
+    lastTemperature = currTemperature;
+}
+void BatteryStatus::setHumidity(float currHumidity) {
+    lastHumidity = currHumidity;
+}
 bool BatteryStatus::checkFull() {
     if (lastVoltage - fullVoltage >= -0.05) {
         

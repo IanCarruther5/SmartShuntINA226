@@ -6,7 +6,7 @@
 
 // This is a SmartShunt 500A
 static const uint16_t PID = 0xA389;
-static const uint16_t AppId = 0b0100000100100000;  // 0x4120
+static const uint16_t AppId = 0b0100000100100010;  // 0x4120
 static const unsigned long UART_TIMEOUT = 900;
 
 
@@ -209,14 +209,14 @@ void sendSmallBlock() {
     } else {
         intVal = roundf(gBattery.tTg() / 60);
     }
+    S += "\r\nT\t" + String(gBattery.temperature(), 10);
     S += "\r\nTTG\t" + String(intVal, 10);
     S += "\r\nAlarm\tOFF";
     S += "\r\nRelay\tOFF";
     S += "\r\nAR\t0";
-    S += "\r\nAR\t0";
     S += "\r\nBMV\tINR226";
     S += "\r\nFW\t" + String(AppId, 16);
-    S += "\r\nMON\t0" ;
+    S += "\r\nMON\t" + String(gMonType) ; //0 battery 1 dc Load 6 dc system
     S += "\r\nChecksum\t";
 
     uint8_t cs = calcChecksum(S);
@@ -444,7 +444,7 @@ void victronLoop() {
 
     if (gVictronEanbled) {
         while (SERIAL_VICTRON.available()) {
-            //SERIAL_DBG.println("Data available");
+            SERIAL_DBG.println("Data available");
             rxData(now);
         }
 

@@ -15,6 +15,7 @@
 #include "webHandling.h"
 #include "modbusHandling.h"
 #include "victronHandling.h"
+#include "temperature.h"
 
 
 void setup() {
@@ -35,6 +36,7 @@ void setup() {
 #endif
 
     sensorInit();
+    temperatureSetup();
     modbusInit();
     victronInit();
 }
@@ -47,6 +49,10 @@ void loop() {
         victronInit();
     }
     sensorLoop();
+    if(!gSensorInitialized)
+    {
+    temperatureLoop();
+    }
     modbusLoop();
     victronLoop();
     gParamsChanged = false;

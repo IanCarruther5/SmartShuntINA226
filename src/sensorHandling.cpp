@@ -6,6 +6,7 @@
 #include "common.h"
 #include "sensorHandling.h"
 #include "statusHandling.h"
+#include "temperature.h"
 
 #if CONFIG_IDF_TARGET_ESP32S2
 #define PIN_SCL SCL
@@ -329,6 +330,7 @@ void sensorLoop() {
     while (alertCounter && ina.isConversionReady()) {           
         updateAhCounter();
         gBattery.setVoltage(ina.readBusVoltage() * gVoltageCalibrationFactor);
+        temperatureLoop();
     }
     
     if (now - lastUpdate >= UPDATE_INTERVAL) {
