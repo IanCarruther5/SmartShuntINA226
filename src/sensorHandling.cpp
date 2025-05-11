@@ -7,18 +7,9 @@
 #include "sensorHandling.h"
 #include "statusHandling.h"
 #include "temperature.h"
+#include "display.h"
 
-#if CONFIG_IDF_TARGET_ESP32S2
-#define PIN_SCL SCL
-#define PIN_SDA SDA
-#define PIN_INTERRUPT 7
-#elif defined(ESP8266)
-#define PIN_SCL D1
-#define PIN_SDA D2
-#define PIN_INTERRUPT D5
-#else
-#error "Unknown Device"
-#endif
+
 
 
 
@@ -259,11 +250,12 @@ void sensorSetShunt(uint16_t id) {
 
 void setupSensor() {
     // Default INA226 address is 0x40
-    gSensorInitialized = ina.begin();
+    gSensorInitialized = ina.begin(0x40);
 
     // Check if the connection was successful, stop if not
     if (!gSensorInitialized) {
         SERIAL_DBG.println("Connection to sensor failed");
+        displayMessage("no sensor");
         
     }
     // Configure INA226

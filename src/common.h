@@ -21,6 +21,7 @@ extern float gCurrentCalibrationFactor;
 extern uint16_t gMaxCurrentA;
 extern uint16_t gModbusId;
 extern bool gSensorInitialized;
+extern bool gTempSensorInitialized;
 extern bool gModbusEanbled;
 extern bool gVictronEanbled;
 
@@ -59,4 +60,14 @@ extern char gMonType[2];
 #define SERIAL_MODBUS SERIAL_VICTRON
 #endif
 
-
+#if CONFIG_IDF_TARGET_ESP32S2
+#define PIN_SCL SCL
+#define PIN_SDA SDA
+#define PIN_INTERRUPT 7
+#elif defined(ESP8266)
+#define PIN_SCL D2
+#define PIN_SDA D1
+#define PIN_INTERRUPT D5
+#else
+#error "Unknown Device"
+#endif

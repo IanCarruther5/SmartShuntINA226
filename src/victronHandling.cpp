@@ -4,10 +4,23 @@
 #include "common.h"
 #include "statusHandling.h"
 
+/*static uint16_t makeAppId(uint16_t versionNumber) {
+    uint8_t major = versionNumber / 100;
+    uint8_t minor = versionNumber % 100;
+    return (major << 8) | minor;
+}*/
+
 // This is a SmartShunt 500A
 static const uint16_t PID = 0xA389;
-static const uint16_t AppId = 0x4416;  // 0x4120
+
+//SmartShunt 500A/50mV 0xA389
+//SmartShunt 1000A/50mV 0xA38A
+//SmartShunt 2000A/50mV 0xA38B
+
+static const uint16_t Version = 416;
+static const uint16_t AppId =  0x4416;
 static const unsigned long UART_TIMEOUT = 900;
+
 
 
 static unsigned long lastHexCmdMillis = 0;
@@ -71,7 +84,7 @@ void commandPing(uint8_t command, uint16_t, uint8_t, uint8_t*, uint8_t) {
 }
 
 void commandAppVersion(uint8_t command, uint16_t, uint8_t, uint8_t*, uint8_t) {
-    uint8_t answer[] = { 1, AppId & 0xFF, AppId >> 8 };
+    uint8_t answer[] = { 1, AppId & 0xFF, AppId >> 8 };  
     sendAnswer(answer, sizeof(answer));
 }
 
@@ -204,18 +217,20 @@ void sendSmallBlock() {
     S += "\r\nCE\t" + String(intVal);
     intVal = roundf(gBattery.soc() * 1000);
     S += "\r\nSOC\t" + String(intVal, 10);
+    intVal = roundf(gBattery.temperature() * 1000);
+    S += "\r\nT\t" + String(intVal, 10);
     if (gBattery.tTg() == INFINITY) {
         intVal = -1;
     } else {
         intVal = roundf(gBattery.tTg() / 60);
     }
-    S += "\r\nT\t" + String(gBattery.temperature(), 10);
+
     S += "\r\nTTG\t" + String(intVal, 10);
     S += "\r\nAlarm\tOFF";
     S += "\r\nRelay\tOFF";
     S += "\r\nAR\t0";
     S += "\r\nBMV\tINR226";
-    S += "\r\nFW\t" + String(AppId, 16);
+    S += "\r\nFW\t " +String(Version,10); //;
     S += "\r\nMON\t" + String(gMonType) ; //0 battery 1 dc Load 6 dc system
     S += "\r\nChecksum\t";
 
@@ -292,7 +307,7 @@ void rxData(unsigned long now) {
     bool ok;
 
     while (true) {
-        //SERIAL_DBG.printf("Status is: %d\r\n",status);
+        SERIAL_DBG.printf("Status is: %d\r\n",status);
         if (status != IDLE && (now - lastHexCmdMillis > UART_TIMEOUT)) {
             status = IDLE;
             lastHexCmdMillis = 0;
@@ -301,7 +316,7 @@ void rxData(unsigned long now) {
         switch (status) {
             case IDLE:
                 inbyte = SERIAL_VICTRON.read();
-                //SERIAL_DBG.printf("%x\r\n",inbyte); 
+                SERIAL_DBG.printf("%x\r\n",inbyte); 
                 if (inbyte == ':') {
                     lastHexCmdMillis = now;
                     // A new command starts
@@ -444,7 +459,7 @@ void victronLoop() {
 
     if (gVictronEanbled) {
         while (SERIAL_VICTRON.available()) {
-            SERIAL_DBG.println("Data available");
+            SERIAL_DBG.println(String(now));
             rxData(now);
         }
 

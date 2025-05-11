@@ -24,6 +24,8 @@
 
 #include "common.h"
 #include "statusHandling.h"
+#include "temperature.h"
+#include "display.h"
 
 #define SOC_RESPONSE \
 "<!DOCTYPE HTML>\
@@ -119,7 +121,7 @@ bool gVictronEanbled = true;
 char gCustomName[64] = "SmartShunt D1";
 
 char gMonType[2] ="1";
-
+char gDevType[7] ="0xA389";
 // -- We can add a legend to the separator
 IotWebConf iotWebConf(gCustomName, &dnsServer, &server, wifiInitialApPassword, CONFIG_VERSION);
 
@@ -259,6 +261,20 @@ iotwebconf::SelectTParameter<STRING_LEN> monitorType =
    defaultValue(gMonType).
    build();
 
+
+   static const char typeValues[][STRING_LEN] = { "0xA389", "0xA38A","0xA38B" };
+   static const char typeNames[][STRING_LEN] = { "SmartShunt 500A/50mV", "SmartShunt 1000A/50mV", "SmartShunt 2000A/50mV "};
+   
+   iotwebconf::SelectTParameter<STRING_LEN> deviceType =
+      iotwebconf::Builder<iotwebconf::SelectTParameter<STRING_LEN>>("dev").
+      label("Device Type").
+      optionValues((const char*)typeValues).
+      optionNames((const char*)typeNames).
+      optionCount(sizeof(typeValues) / STRING_LEN).
+      nameLength(STRING_LEN).
+      defaultValue(gDevType).
+      build();
+
 iotwebconf::TextTParameter<sizeof(gCustomName)> nameParam =
 iotwebconf::Builder<iotwebconf::TextTParameter<sizeof(gCustomName)>>("name").
 label("Name").
@@ -297,7 +313,19 @@ void onSetSoc() {
 
     server.send(200, "text/html", SOC_RESPONSE);
 } 
+void onSendMessage() {
+  String message = server.arg("message");
+  message.trim();
+  if(!message.isEmpty()) {
+      displayMessage(message);
+      server.send(200, "text/html", SOC_RESPONSE);
+  }
+  else{
 
+  server.send(400, "text/html", SOC_RESPONSE);
+  }
+
+} 
 
 void handleSetRuntime() {
 String s = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";  
@@ -323,12 +351,12 @@ void handleApi()
     s += "\"Temperature\": " + String(gBattery.temperature())+",";
     s += "\"Humidity\": " + String(gBattery.humidity())+",";
     s += "\"AvgConsumption\": " + String(gBattery.averageCurrent(),3) ;
-  
-  
+ 
   s+="}";
 
 
   server.send(200, "text/json", s);
+  displayMessage("API accessed");
 }
 void wifiSetup()
 {
@@ -352,6 +380,7 @@ void wifiSetup()
 
   communicationGroup.addItem(&nameParam);
   communicationGroup.addItem(&monitorType);
+  communicationGroup.addItem(&deviceType);
   communicationGroup.addItem(&protocolChooserParam);
   communicationGroup.addItem(&modbusId);
 
@@ -388,7 +417,9 @@ void wifiSetup()
   
   server.on("/setruntime", handleSetRuntime);
   server.on("/setsoc",HTTP_POST,onSetSoc);
-    server.on("/api", handleApi);
+  server.on("/api", handleApi);
+
+  server.on("/message",HTTP_POST,onSendMessage);
 
 }
 
@@ -430,6 +461,8 @@ void handleRoot()
             sprintf(serialnr, "%08X", ESP.getChipId());
 #endif
  s += "<br><br><b>Serial Number</b> : " +String(serialnr  );
+ s += "<br><br><b>Device Type</b> : " +String(gDevType  );
+ s += "<br><br><b>Monitor Type</b> : " +String(gMonType  );
   s += "<br><br><b>Config Values</b> <ul>";
   s += "<li>Shunt resistance  : " + String(gShuntResistancemR, 4) + " m&#8486;";
   s += "<li>Shunt max current : " + String(gMaxCurrentA, 3) + " A";
@@ -470,10 +503,45 @@ void handleRoot()
   } else {
     s += "<br><div><font color=\"red\" size=+1><b>Sensor failure!</b></font></div><br>";
   }
+  if (gTempSensorInitialized) {
   s += "<ul> ";
    s += "<li>Temperature : " + String(gBattery.temperature())+" C";
     s += "<li>Humidity: " + String(gBattery.humidity(),3) + " %";
     s += "</ul>";
+  }
+
+  s += "<br><b>History</b>";
+
+  s += "<ul> ";
+    const Statistics& stats = gBattery.statistics();
+    int intVal;
+    s += "<li>Deepest discharge : " + String(stats.deepestDischarge);
+    s += "<li>Last Discharge : " + String(stats.lastDischarge);
+    s += "<li>Average Discharge : " + String(stats.averageDischarge);
+    s += "<li>Charge Cycles : " + String(stats.numChargeCycles);
+    s += "<li>No Full Discharges : " + String(stats.numFullDischarge);
+    intVal = roundf(stats.sumApHDrawn);
+    s += "<li>Consumed AH : " + String(intVal);
+    s += "<li>Min Voltage : " + String(stats.minBatVoltage);
+    s += "<li>Max Voltage : " + String(stats.maxBatVoltage);
+    s += "<li>Time since full : ";
+    if (stats.secsSinceLastFull < 0) {
+        s += "---";
+    } else {
+        s += String(stats.secsSinceLastFull);
+    }
+    s += "<li>H10 : " + String(stats.numAutoSyncs);
+    s += "<li>H11 : " + String(stats.numLowVoltageAlarms);
+    s += "<li>H12 : " + String(stats.numHighVoltageAlarms);
+    intVal = roundf(stats.amountDischargedEnergy);
+    s += "<li>Discharged Energy : " + String(intVal);
+    intVal = roundf(stats.amountChargedEnergy);
+    s += "<li>Charged Energy : " + String(intVal);
+
+    s += "</ul>";
+
+
+
   s += "<UL><LI>Go to <a href='config'>configure page</a> to change configuration.";
   s += "<LI>Go to <a href='setruntime'>runtime modification page</a> to change runtime data.</UL>";
   s += "</body></html>\n";

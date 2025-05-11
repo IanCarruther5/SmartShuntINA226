@@ -50,6 +50,10 @@ void BatteryStatus::updateTtG() {
     }
 }
 
+/// @brief 
+/// @param current 
+/// @param period 
+/// @param numPeriods 
 void BatteryStatus::updateConsumption(float current, float period,
                                       uint16_t numPeriods) {
 
