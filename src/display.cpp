@@ -87,7 +87,7 @@ bool gDisplayInitialized =false;
    //testanimate(logo_bmp, LOGO_WIDTH, LOGO_HEIGHT); // Animate bitmaps
  }
  
- void displayloop() {
+ void displayLoop() {
   if(!gDisplayInitialized )
   {
     return;
