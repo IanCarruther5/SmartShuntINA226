@@ -23,8 +23,6 @@ namespace {
 void initSerial() {
 #if ARDUINO_USB_CDC_ON_BOOT
     SERIAL_VICTRON.begin(19200, SERIAL_8N1, RX, TX);
-    // there seems to be a bug in the Arduino core that
-    // prevents RX from working. The next line fixes that....
     SERIAL_VICTRON.setPins(RX, TX, -1, -1);
     SERIAL_DBG.begin(115200);
 #else

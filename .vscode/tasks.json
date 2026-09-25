@@ -21,6 +21,19 @@
 				"isDefault": true
 			},
 			"label": "PlatformIO: Build"
-		}
+		},{
+      "label": "PlatformIO: Native Test",
+      "type": "shell",
+      "command": "pio",
+      "args": ["test", "-e", "native"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    }
 	]
 }

@@ -75,9 +75,5 @@ void test_runtime_loop_applies_config_change_before_other_tasks() {
     TEST_ASSERT_FALSE(configChanged);
 }
 
-int main(int argc, char** argv) {
-    UNITY_BEGIN();
-    RUN_TEST(test_runtime_loop_runs_in_order_without_config_change);
-    RUN_TEST(test_runtime_loop_applies_config_change_before_other_tasks);
-    return UNITY_END();
-}
+
+

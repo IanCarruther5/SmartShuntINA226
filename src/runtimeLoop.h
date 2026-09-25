@@ -1,5 +1,7 @@
 #pragma once
 
+#include "configChange.h"
+
 using RuntimeCallback = void (*)();
 
 struct RuntimeCallbacks {
@@ -17,11 +19,10 @@ inline void runRuntimeLoop(const RuntimeCallbacks& callbacks, bool& configChange
         callbacks.wifi();
     }
 
-    if (configChanged) {
+    if (handleConfigChange(configChanged)) {
         if (callbacks.configChange != nullptr) {
             callbacks.configChange();
         }
-        configChanged = false;
     }
 
     if (callbacks.sensor != nullptr) {
