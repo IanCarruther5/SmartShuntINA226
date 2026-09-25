@@ -17,8 +17,8 @@ static const uint16_t PID = 0xA389;
 //SmartShunt 1000A/50mV 0xA38A
 //SmartShunt 2000A/50mV 0xA38B
 
-static const uint16_t Version = 416;
-static const uint16_t AppId =  0x4416;
+static const uint16_t Version = 419;
+static const uint16_t AppId =  0x4419;
 static const unsigned long UART_TIMEOUT = 900;
 
 

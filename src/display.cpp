@@ -83,7 +83,7 @@ bool gDisplayInitialized =false;
    delay(1000);
    display.invertDisplay(false);
    delay(1000);
- displayMessage("init");
+ displayMessage("Display Initialised");
    //testanimate(logo_bmp, LOGO_WIDTH, LOGO_HEIGHT); // Animate bitmaps
  }
  
@@ -93,14 +93,18 @@ bool gDisplayInitialized =false;
     return;
   }
   t++;
-    if(t==200)
+    if(t==200 )
     {
+      if(gSensorInitialized)
+      {
       displayPower();
+      }
       t=0;
     }
-    if(t==100)
-    {
+    if(t==100 && gTempSensorInitialized)
+    { 
       displayTemperature();
+      
     }
  }
  
@@ -144,7 +148,7 @@ s="I: " + String(gBattery.current(),3) + " A";
  
  void displayTemperature(void) {
 
-  SERIAL_DBG.println(F("display power values"));
+  SERIAL_DBG.println(F("display temp values"));
   if(!gDisplayInitialized )
   {
     return;

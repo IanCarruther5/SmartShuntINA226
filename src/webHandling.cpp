@@ -4,6 +4,7 @@
 
 #include <Arduino.h>
 #include <ArduinoOTA.h>
+#include <ArduinoJson.h>
 #if ESP32
 #include <WiFi.h>
 // For ESP32 IotWebConf provides a drop-in replacement for UpdateServer.
@@ -55,7 +56,7 @@
 const char wifiInitialApPassword[] = "password";
 
 // -- Configuration specific key. The value should be modified if config structure was changed.
-#define CONFIG_VERSION "C2"
+#define CONFIG_VERSION "D1"
 
 // -- When CONFIG_PIN is pulled to ground on startup, the Thing will use the initial
 //      password to buld an AP. (E.g. in case of lost password)
@@ -122,6 +123,8 @@ char gCustomName[64] = "SmartShunt D1";
 
 char gMonType[2] ="1";
 char gDevType[7] ="0xA389";
+StaticJsonDocument<1024> jsonDocument;
+char buffer[1024];
 // -- We can add a legend to the separator
 IotWebConf iotWebConf(gCustomName, &dnsServer, &server, wifiInitialApPassword, CONFIG_VERSION);
 
@@ -326,7 +329,59 @@ void onSendMessage() {
   }
 
 } 
+void onSendSettings()
+{
+  if (server.hasArg("plain") == false) {
+    
+  server.send(400, "text/html", "");
+  }
+  String body = server.arg("plain");
+  deserializeJson(jsonDocument, body);
 
+
+  float soc = jsonDocument["soc"];
+  //const char* montype = jsonDocument["montype"];
+  char montype[2];
+strncpy(montype, jsonDocument["montype"], sizeof(montype));
+montype[sizeof(montype) - 1] = '\0';
+
+  float capacity = jsonDocument["capacity"];
+  float chargedvolts = jsonDocument["chargedvolts"];
+      //gBattery.setBatterySoc(soc);
+      gFullVoltagemV=chargedvolts;
+      gCapacityAh=capacity;
+      strcpy(gMonType,montype);
+      
+    gBattery.setParameters(gCapacityAh,100,18,1,gFullVoltagemV,1);
+  server.send(200, "text/json", "");
+}
+void onSendData() {
+  if (server.hasArg("plain") == false) {
+    
+  server.send(400, "text/html", "");
+  }
+  String body = server.arg("plain");
+  deserializeJson(jsonDocument, body);
+
+  float voltage = jsonDocument["voltage"];
+  float current = jsonDocument["current"];
+  float temperature = jsonDocument["temperature"];
+
+  if(voltage!=0.0f) {
+      gBattery.setVoltage(voltage);
+      gBattery.updateConsumption(current,1.2,1);
+      gBattery.setTemperature(temperature),
+      gBattery.checkFull();
+      gBattery.updateTtG();
+
+
+  server.send(200, "text/json", "");
+  }
+  else{
+
+  server.send(404, "text/html", SOC_RESPONSE);
+  }
+}
 void handleSetRuntime() {
 String s = "<!DOCTYPE html><html lang=\"en\"><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, user-scalable=no\"/>";  
   s += "<title>Set runtime data</title></head><body>";
@@ -420,6 +475,8 @@ void wifiSetup()
   server.on("/api", handleApi);
 
   server.on("/message",HTTP_POST,onSendMessage);
+  server.on("/data",HTTP_POST,onSendData);
+  server.on("/settings",HTTP_POST,onSendSettings);
 
 }
 

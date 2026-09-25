@@ -49,7 +49,7 @@ displaysetup();
     modbusInit();
     victronInit();
     delay(1000);
-    displayMessage("test");
+    displayMessage("Initilised");
 }
 
 void loop() {
@@ -62,7 +62,6 @@ void loop() {
     sensorLoop();
    
      temperatureLoop();
-     //testdrawstyles();
          modbusLoop();
          
     victronLoop();

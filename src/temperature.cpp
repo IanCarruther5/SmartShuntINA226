@@ -10,7 +10,7 @@ void temperatureSetup() {
   gTempSensorInitialized =aht.begin();
   if (! gTempSensorInitialized) {
     Serial.println("Could not find AHT? Check wiring");
-    displayMessage("no temp");
+    displayMessage("No temperature sensor found");
   }
   Serial.println("AHT10 or AHT20 found");
 }

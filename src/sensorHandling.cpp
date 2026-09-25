@@ -255,7 +255,7 @@ void setupSensor() {
     // Check if the connection was successful, stop if not
     if (!gSensorInitialized) {
         SERIAL_DBG.println("Connection to sensor failed");
-        displayMessage("no sensor");
+        displayMessage("No current sensor found");
         
     }
     // Configure INA226
