@@ -97,8 +97,8 @@ void commandRestart(uint8_t command, uint16_t, uint8_t, uint8_t*, uint8_t) {
     // Ignore for now
 }
 
-void commandGet(uint8_t command, uint16_t address, uint8_t flags, uint8_t*,
-    uint8_t) {
+void commandGet(uint8_t command, uint16_t address, uint8_t flags,
+    uint8_t* valueBuf, uint8_t valueSize) {
     uint8_t answer[128];
     uint8_t aSize = 4;
     size_t len;
@@ -129,9 +129,13 @@ void commandGet(uint8_t command, uint16_t address, uint8_t flags, uint8_t*,
             memcpy(answer + 4, serialnr, len);
             break;
         case 0x010C:
-            len = strlen(gCustomName);
-            aSize = 4 + len;
-            memcpy(answer + 4, gCustomName, len);
+            // Reserve one byte for the terminating NUL.
+            if (valueSize >= sizeof(gCustomName)) {
+                answer[3] = FLAG_PARAMETER_ERROR;
+            } else {
+                memcpy(gCustomName, valueBuf, valueSize);
+                gCustomName[valueSize] = '\0';
+            }
             break;
         case 0x0104:
             // GroupId. Used to group similar devices together...
@@ -387,35 +391,38 @@ void rxData(unsigned long now) {
                 status = READ_DATA;
                 // Fall through                
             case READ_DATA:                       
+                if (currIndex >= sizeof(valueBuffer)) {
+                    status = IDLE;
+                    return;
+                }
+
                 ok = readByte(valueBuffer[currIndex]);
-                //SERIAL_DBG.printf("Read %X\r\n", valueBuffer[currIndex]);
-                if (ok) {
-                    if (valueBuffer[currIndex] == '\r') {                        
+                if (!ok) {
+                    SERIAL_DBG.printf(
+                        "Read failed (ix %d, checksum %x)\r\n",
+                        currIndex, checksum);
+                    status = IDLE;
+                    return;
+                }
+
+                if (valueBuffer[currIndex] == '\r') {
+                    return;
+                }
+
+                if (valueBuffer[currIndex] == '\n') {
+                    // The preceding decoded byte is the checksum.
+                    if (currIndex == 0) {
+                        status = IDLE;
                         return;
                     }
-                    if (valueBuffer[currIndex] == '\n') {
-                        // End of command
-                        // We already read the checksum as the last character 
-                        // Overwrite it with 0 (if it's a string it's correctly terminated then)
-                        valueBuffer[--currIndex] = 0;
-                        if (checksum != 0x55) {
-                            // This is an error
-                            status = IDLE;
-                        } else {
-                            status = EXECUTE;
-                        }                        
-                        break;
-                    }
-                    checksum += valueBuffer[currIndex++];
-                    if (currIndex >= sizeof(valueBuffer)) {
-                        // This message is too long for us....
-                        status = IDLE;
-                    }
-                } else {
-                    // Error while reading from UART
-                    SERIAL_DBG.printf("Read failed (ix %d, checksum %x)\r\n",currIndex,checksum);
-                    status = IDLE;
+
+                    valueBuffer[--currIndex] = '\0';
+                    status = (checksum == 0x55) ? EXECUTE : IDLE;
+                    break;
                 }
+
+                checksum += valueBuffer[currIndex];
+                ++currIndex;
                 return;
             case READ_CHECKSUM:
                 ok = readByte(inbyte);

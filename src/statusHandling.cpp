@@ -1,8 +1,6 @@
 #include "common.h"
 #include "statusHandling.h"
-
-
-
+#include "batteryLogic.h"
 
 BatteryStatus gBattery;
 
@@ -19,25 +17,39 @@ BatteryStatus::BatteryStatus() {
     }
 }
 
-void BatteryStatus::setParameters(uint16_t capacityAh, uint16_t chargeEfficiencyPercent, uint16_t minPercent, uint16_t tailCurrentmA, uint16_t fullVoltagemV,uint16_t fullDelayS) 
-{
+void BatteryStatus::setParameters(
+    uint16_t capacityAh,
+    uint16_t chargeEfficiencyPercent,
+    uint16_t minPercent,
+    uint16_t tailCurrentmA,
+    uint16_t fullVoltagemV,
+    uint16_t fullDelayS) {
+    const BatteryParameters params = deriveBatteryParameters(
+        capacityAh,
+        chargeEfficiencyPercent,
+        minPercent,
+        tailCurrentmA,
+        fullVoltagemV,
+        fullDelayS);
 
-        batteryCapacity = ((float)capacityAh) *60.0f * 60.0f; // We use it in As
-        chargeEfficiency = ((float)chargeEfficiencyPercent) / 100.0f;
-        tailCurrent = tailCurrentmA / 1000.0f;
-        fullVoltage = fullVoltagemV / 1000.0f;
-        minAs = minPercent * batteryCapacity / 100.0f;
-        fullDelay = ((unsigned long)fullDelayS) *1000;    
-        //SERIAL_DBG.printf("Init values: Capacity %.3f, efficiency %.3f, fullDelay %ld, \n",batteryCapacity,chargeEfficiency,fullDelay);
+    batteryCapacity = params.capacityAs;
+    chargeEfficiency = params.chargeEfficiency;
+    tailCurrent = params.tailCurrentA;
+    fullVoltage = params.fullVoltageV;
+    minAs = params.minAs;
+    fullDelay = params.fullDelayMs;
 
+    // Configuration may have changed while retaining RTC-restored state.
+    stats.remainAs = clampRemainingAs(stats.remainAs, batteryCapacity);
+    stats.socVal = batterySocFraction(stats.remainAs, batteryCapacity);
 }
 
 void BatteryStatus::updateSOC() {
-    stats.socVal = stats.remainAs / batteryCapacity;
-    if (fabs(lastSoc - stats.socVal) >= .005) {
-        // Store value in RTC memory
+    stats.socVal = batterySocFraction(stats.remainAs, batteryCapacity);
+
+    if (fabs(lastSoc - stats.socVal) >= .005f) {
         writeStatusToRTC();
-        lastSoc = stats.socVal;        
+        lastSoc = stats.socVal;
     }
 }
 
@@ -76,29 +88,27 @@ void BatteryStatus::updateConsumption(float current, float period,
         lastCurrent = current;
     }
     
-    periodConsumption = (lastCurrent + current) / 2.0 * period * numPeriods;
+    const float rawPeriodConsumption = calculatePeriodConsumptionAs(
+        lastCurrent, current, period, numPeriods);
 
-    // Has to be in 0.01 kWh....
-    float consumption = periodConsumption / 3.6 / 1000.0 / 10.0 * lastVoltage;
-    if (periodConsumption > 0) {
-        // We are charging
-        stats.amountChargedEnergy += consumption;
-        periodConsumption *= chargeEfficiency;
+    // Energy statistics use the unadjusted current integration.
+    const float energy =
+        rawPeriodConsumption / 3.6f / 1000.0f / 10.0f * lastVoltage;
+
+    if (rawPeriodConsumption > 0.0f) {
+        stats.amountChargedEnergy += energy;
     } else {
-        stats.sumApHDrawn += periodConsumption / -3.6;
-        stats.amountDischargedEnergy -= consumption;
+        stats.sumApHDrawn += rawPeriodConsumption / -3.6f;
+        stats.amountDischargedEnergy -= energy;
     }
 
-    
-    stats.remainAs += periodConsumption;
-    stats.consumedAs += periodConsumption;
-    
-    if (stats.remainAs > batteryCapacity) {
-        stats.remainAs = batteryCapacity;
-    } else if(stats.remainAs < 0.0f) {
-        stats.remainAs = 0.0f;
-    }
-    
+    applyBatteryDelta(
+        stats.remainAs,
+        stats.consumedAs,
+        rawPeriodConsumption,
+        batteryCapacity,
+        chargeEfficiency);
+
     lastCurrent = current;
 }
 
@@ -120,39 +130,53 @@ void BatteryStatus::setHumidity(float currHumidity) {
     lastHumidity = currHumidity;
 }
 bool BatteryStatus::checkFull() {
-    if (lastVoltage - fullVoltage >= -0.05) {
-        
-        if (stats.socVal < 0.90) {
-            // This is just to indicate that we will be close to full
-            setBatterySoc(0.90);
-        }
-        float current = -1 * getAverageConsumption();
-        if (current > 0.0 && current <= tailCurrent) {
-            unsigned long now = millis();
-            if (fullReachedAt == 0) {
-                fullReachedAt = now;
-            }
-            unsigned long delay = now - fullReachedAt;
-            if (delay >= fullDelay) {
-                // And here we are. 100 %
-                setBatterySoc(1.0);
-                if (!isSynced) {
-                    resetStats();
-                    isSynced = true;
-                }
-                stats.secsSinceLastFull = 0;
-                stats.numAutoSyncs++;
-                stats.lastDischarge = roundf(stats.remainAs / 3.6);
-                stats.consumedAs = 0.0;
-                return true;
-            }
-        } else {
-            fullReachedAt = 0;
-        }
-    } else {
+    const bool voltageReached = lastVoltage >= fullVoltage - 0.05f;
+
+    if (!voltageReached) {
         fullReachedAt = 0;
+        isSynced = false;
+        return false;
     }
-    return false;
+
+    if (stats.socVal < 0.90f) {
+        // Indicate that the battery is close to full.
+        setBatterySoc(0.90f);
+    }
+
+    const float current = -getAverageConsumption();
+    const bool tailCurrentReached =
+        current > 0.0f && current <= tailCurrent;
+
+    if (!tailCurrentReached) {
+        fullReachedAt = 0;
+        isSynced = false;
+        return false;
+    }
+
+    // Do not count another sync while the full condition remains true.
+    if (isSynced) {
+        return false;
+    }
+
+    const unsigned long now = millis();
+    if (fullReachedAt == 0) {
+        fullReachedAt = now;
+    }
+
+    if (now - fullReachedAt < fullDelay) {
+        return false;
+    }
+
+    setBatterySoc(1.0f);
+    resetStats();
+    isSynced = true;
+
+    stats.secsSinceLastFull = 0;
+    stats.numAutoSyncs++;
+    stats.lastDischarge = roundf(stats.remainAs / 3.6f);
+    stats.consumedAs = 0.0f;
+
+    return true;
 }
 
 
