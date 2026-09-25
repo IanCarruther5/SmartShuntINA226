@@ -1,8 +1,8 @@
-
 #include <Arduino.h>
 
 #include "common.h"
 #include "statusHandling.h"
+#include "victronProtocol.h"
 
 /*static uint16_t makeAppId(uint16_t versionNumber) {
     uint8_t major = versionNumber / 100;
@@ -274,23 +274,23 @@ void sendHistoryBlock() {
 #define char2int(VAL) ((VAL) > '@' ? ((VAL) & 0xDF) - 'A' + 10 : (VAL) - '0')
 
 bool readByte(uint8_t& value) {
-    char result[2];
-    int read;
-    read = SERIAL_VICTRON.readBytes(result,1);
-    if (read == 1) {
-        if (result[0] < '0') {
-            value = (uint8_t)result[0];
-            return true;
-        }
-        read = SERIAL_VICTRON.readBytes(result+1,1);
-        if (read == 1) {
-            value = (uint8_t)((char2int(result[0]) << 4) | char2int(result[1]));
-            return true;
-        }
+    char first;
+    if (SERIAL_VICTRON.readBytes(&first, 1) != 1) {
+        return false;
     }
 
-    SERIAL_DBG.printf("readByte: Read failure read %d %c %c\r\n", read, result[0], result[1]);
-    return false;
+    // Line endings are raw characters; protocol data is hexadecimal text.
+    if (first == '\r' || first == '\n') {
+        value = static_cast<uint8_t>(first);
+        return true;
+    }
+
+    char second;
+    if (SERIAL_VICTRON.readBytes(&second, 1) != 1) {
+        return false;
+    }
+
+    return victronDecodeHexByte(first, second, value);
 }
 
 
@@ -327,9 +327,16 @@ void rxData(unsigned long now) {
                     status = READ_COMMAND;
                 }
                 return;
-            case READ_COMMAND:
+            case READ_COMMAND: {
                 inbyte = SERIAL_VICTRON.read();
-                command = char2int(inbyte);
+                uint8_t commandNibble;
+
+                if (!victronHexNibble(static_cast<char>(inbyte), commandNibble)) {
+                    status = IDLE;
+                    return;
+                }
+
+                command = commandNibble;
                 checksum += command;
                 if (command < NUM_COMMANDS) {
                     status = (STATE)command;
@@ -339,6 +346,7 @@ void rxData(unsigned long now) {
                 }
                 // Continue in the loop
                 break;
+            }
             case COMMAND_PING:
             case COMMAND_APP_VERSION:
             case COMMAND_PRODUCT_ID:

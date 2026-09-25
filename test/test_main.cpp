@@ -10,6 +10,10 @@ void test_calculate_soc_from_delta_clamps_range();
 void test_is_battery_full();
 void test_handle_config_change_true_once();
 void test_handle_config_change_false();
+void test_victron_decodes_hex_byte();
+void test_victron_rejects_non_hex();
+void test_victron_frame_checksum_validation();
+
 int main(int argc, char** argv) {
     (void)argc;
     (void)argv;
@@ -25,5 +29,8 @@ int main(int argc, char** argv) {
     RUN_TEST(test_is_battery_full);
     RUN_TEST(test_handle_config_change_true_once);
     RUN_TEST(test_handle_config_change_false);
+    RUN_TEST(test_victron_decodes_hex_byte);
+    RUN_TEST(test_victron_rejects_non_hex);
+    RUN_TEST(test_victron_frame_checksum_validation);
     return UNITY_END();
 }
